@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conformal Prediction Simülasyonu</title>
+  <meta name="description"
+    content="İnteraktif Conformal Prediction simülasyonu - geçerli tahmin aralıklarını görsel olarak keşfedin." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- Hero Header -->
+  <header class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <nav style="position:relative;z-index:1;display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+        <span style="font-size:13px;font-weight:600;color:var(--accent);">Temel Simülasyon</span>
+        <span style="color:var(--border-glow);">·</span>
+        <a href="rejection.html"
+          style="color:var(--text-muted);text-decoration:none;font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);transition:all .2s;"
+          onmouseover="this.style.color='var(--accent4)';this.style.borderColor='rgba(251,146,60,.5)'"
+          onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">Rejection Option
+          Simülasyonu →</a>
+      </nav>
+      <div class="hero-badge">
+        <span class="pulse-dot"></span>
+        <span>İnteraktif Simülasyon</span>
+      </div>
+      <h1>Conformal Prediction</h1>
+      <p
+        style="margin:6px 0 14px;font-size:13px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;background:linear-gradient(90deg,#6e8efb,#a78bfa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+        Uncertainty-Aware Prediction</p>
+
+      <div class="hero-stats" id="heroStats">
+        <div class="hstat">
+          <span class="hstat-val" id="statCoverage">—</span>
+          <span class="hstat-label">Gerçek Kapsama</span>
+        </div>
+        <div class="hstat">
+          <span class="hstat-val" id="statTarget">—</span>
+          <span class="hstat-label">Hedef Kapsama</span>
+        </div>
+        <div class="hstat">
+          <span class="hstat-val" id="statN">—</span>
+          <span class="hstat-label">Örneklem (n)</span>
+        </div>
+        <div class="hstat">
+          <span class="hstat-val" id="statWidth">—</span>
+          <span class="hstat-label">Ort. Aralık Genişliği</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="layout">
+
+    <!-- LEFT: Controls -->
+    <aside class="panel controls-panel">
+      <div class="panel-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+        </svg>
+        Parametreler
+      </div>
+
+      <!-- Data -->
+      <div class="control-group">
+        <div class="group-label">Veri Ayarları</div>
+
+        <div class="control-row">
+          <label for="nTotal">Toplam Örnek (n)</label>
+          <div class="slider-wrap">
+            <input type="range" id="nTotal" min="50" max="500" value="200" step="10" />
+            <span class="slider-val" id="nTotalVal">200</span>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label for="calibRatio">Kalibrasyon Oranı</label>
+          <div class="slider-wrap">
+            <input type="range" id="calibRatio" min="0.1" max="0.6" value="0.3" step="0.05" />
+            <span class="slider-val" id="calibRatioVal">30%</span>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label for="noiseLevel">Gürültü Seviyesi (σ)</label>
+          <div class="slider-wrap">
+            <input type="range" id="noiseLevel" min="0.1" max="3" value="1" step="0.1" />
+            <span class="slider-val" id="noiseLevelVal">1.0</span>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label for="funcType">Veri Fonksiyonu</label>
+          <select id="funcType" class="custom-select">
+            <option value="linear">Doğrusal</option>
+            <option value="sinusoidal">Sinüzoidal</option>
+            <option value="quadratic">Kuadratik</option>
+            <option value="heteroscedastic">Heterosk. Gürültü</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Conformal -->
+      <div class="control-group">
+        <div class="group-label">Conformal Ayarları</div>
+
+        <div class="control-row">
+          <label for="alphaVal">Hata Oranı (α)</label>
+          <div class="slider-wrap">
+            <input type="range" id="alphaVal" min="0.01" max="0.5" value="0.1" step="0.01" />
+            <span class="slider-val" id="alphaValText">0.10 → %90</span>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label for="scoreType">Uyumsuzluk Skoru</label>
+          <select id="scoreType" class="custom-select">
+            <option value="absolute">Mutlak Hata</option>
+            <option value="normalized">Normalize Edilmiş</option>
+            <option value="signed">İşaretli Hata</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <label for="modelType">Baz Model</label>
+          <select id="modelType" class="custom-select">
+            <option value="linreg">Doğrusal Regresyon</option>
+            <option value="poly2">Polinom (k=2)</option>
+            <option value="poly3">Polinom (k=3)</option>
+            <option value="moving">Hareketli Ortalama</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Visualization -->
+      <div class="control-group">
+        <div class="group-label">Görselleştirme</div>
+
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="showCalib" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span>Kalibrasyon noktaları</span>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="showTrain" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span>Eğitim noktaları</span>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="showBand" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span>Tahmin bandı</span>
+        </div>
+
+        <div class="toggle-row">
+          <label class="toggle">
+            <input type="checkbox" id="showOutlier" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span>Band‑dışı noktalar</span>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btnResample">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="1 4 1 10 7 10" />
+          <path d="M3.51 15a9 9 0 1 0 .49-3.9" />
+        </svg>
+        Yeniden Örnekle
+      </button>
+
+    </aside>
+
+    <!-- CENTER: Charts -->
+    <section class="charts-section">
+
+      <!-- Main Prediction Plot -->
+      <div class="panel chart-panel">
+        <div class="panel-header">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+          Tahmin Aralığı Grafiği
+          <div class="coverage-badge" id="coverageBadge">— kapsama</div>
+        </div>
+        <canvas id="mainChart"></canvas>
+      </div>
+
+      <!-- Bottom row -->
+      <div class="charts-row">
+        <div class="panel chart-panel half">
+          <div class="panel-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18M3 15h18M9 3v18" />
+            </svg>
+            Uyumsuzluk Skoru Dağılımı
+          </div>
+          <canvas id="scoreChart"></canvas>
+        </div>
+
+        <div class="panel chart-panel half">
+          <div class="panel-header">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
+            Kapsama vs α Eğrisi
+          </div>
+          <canvas id="alphaChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT: Info & Steps -->
+    <aside class="panel info-panel">
+      <div class="panel-header">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        Algoritma Adımları
+      </div>
+
+      <div class="steps">
+        <div class="step active" id="step1">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Veri Bölme</div>
+            <div class="step-desc" id="stepDesc1">Veri seti eğitim ve kalibrasyon olarak bölünür.</div>
+          </div>
+        </div>
+        <div class="step" id="step2">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Model Eğitimi</div>
+            <div class="step-desc" id="stepDesc2">Seçilen model yalnızca eğitim verisiyle fitlenir.</div>
+          </div>
+        </div>
+        <div class="step" id="step3">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Uyumsuzluk Skoru</div>
+            <div class="step-desc" id="stepDesc3">Kalibrasyon setinde uyumsuzluk skorları hesaplanır.</div>
+          </div>
+        </div>
+        <div class="step" id="step4">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Eşik Değeri (q̂)</div>
+            <div class="step-desc" id="stepDesc4">⌈(1-α)(n+1)⌉/n. yüzdelik dilim seçilir.</div>
+          </div>
+        </div>
+        <div class="step" id="step5">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <div class="step-title">Tahmin Seti</div>
+            <div class="step-desc" id="stepDesc5">C(x) = {y : s(x,y) ≤ q̂} aralığı oluşturulur.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key Metrics -->
+      <div class="metrics-box" id="metricsBox">
+        <div class="metric-item">
+          <span class="metric-label">Kalibrasyon n</span>
+          <span class="metric-val" id="mCalibN">—</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">q̂ (eşik)</span>
+          <span class="metric-val" id="mQhat">—</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Gerçek Kapsama</span>
+          <span class="metric-val" id="mCoverage">—</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Beklenen Kapsama</span>
+          <span class="metric-val" id="mExpected">—</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Sapma</span>
+          <span class="metric-val" id="mDeviation">—</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Ort. Band Genişliği</span>
+          <span class="metric-val" id="mBandWidth">—</span>
+        </div>
+      </div>
+
+      <!-- Theory Box -->
+      <div class="theory-box">
+        <div class="theory-title">Kapsama Garantisi</div>
+        <div class="theory-formula">P(Y<sub>n+1</sub> ∈ C(X<sub>n+1</sub>)) ≥ 1 − α</div>
+        <div class="theory-desc">
+          Değiştirilebilir (exchangeable) veri varsayımı altında, conformal tahmin seti her zaman en az
+          <strong>(1−α)</strong> kapsama garantisi verir — model doğruluğundan bağımsız olarak.
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <span>Conformal Prediction Simülasyonu</span>
+    <span class="dot-sep">·</span>
+    <span>Split Conformal · Exchangeability · Distribution-Free</span>
+  </footer>
+
+  <script src="simulation.js"></script>
+</body>
+
+</html>

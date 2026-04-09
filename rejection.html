@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Conformal Prediction + Rejection Option Simülasyonu</title>
+  <meta name="description" content="Sınıflandırmada Conformal Prediction ile Rejection Option birleşimini adım adım keşfedin." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* ─── NAV ─── */
+    .sim-nav {
+      position: relative; z-index:1;
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 24px;
+    }
+    .nav-link {
+      color: var(--text-muted); text-decoration: none; font-size: 13px;
+      font-weight: 500; padding: 6px 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface2);
+      transition: all .2s;
+    }
+    .nav-link:hover { color: var(--accent); border-color: var(--accent); }
+    .nav-sep { color: var(--border-glow); }
+    .nav-current { font-size: 13px; color: var(--accent); font-weight: 600; }
+
+    /* ─── STEP BAR ─── */
+    .step-bar-wrap {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 0 24px; overflow-x: auto;
+    }
+    .step-bar {
+      display: flex; align-items: center;
+      max-width: 1500px; margin: 0 auto;
+      padding: 16px 0; gap: 0;
+    }
+    .step-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 6px; cursor: pointer; transition: all .2s;
+      min-width: 80px; padding: 6px 4px;
+    }
+    .step-item:hover .step-bubble { border-color: var(--accent); color: var(--accent); }
+    .step-bubble {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 2px solid var(--border); background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: var(--text-dim);
+      transition: all .3s; flex-shrink: 0;
+    }
+    .step-label {
+      font-size: 10px; color: var(--text-dim); text-align: center;
+      transition: color .3s; font-weight: 500; white-space: nowrap;
+    }
+    .step-item.done .step-bubble {
+      background: rgba(52,211,153,0.12); border-color: var(--success);
+      color: var(--success); font-size: 16px;
+    }
+    .step-item.done .step-label { color: var(--success); }
+    .step-item.active .step-bubble {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-color: transparent; color: white;
+      box-shadow: 0 0 16px rgba(110,142,251,.5);
+      transform: scale(1.15);
+    }
+    .step-item.active .step-label { color: var(--accent); font-weight: 700; }
+    .step-conn {
+      flex: 1; height: 2px; background: var(--border);
+      min-width: 8px; margin-bottom: 20px;
+    }
+
+    /* ─── EXPLAIN BOX ─── */
+    .explain-box {
+      display: flex; align-items: flex-start; gap: 16px;
+      max-width: 1500px; margin: 0 auto;
+      padding: 16px 24px; border-bottom: 1px solid var(--border);
+      background: var(--bg2); flex-wrap: wrap;
+    }
+    .explain-icon {
+      font-size: 28px; flex-shrink: 0;
+      width: 48px; height: 48px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; display: flex; align-items: center;
+      justify-content: center;
+    }
+    .explain-text { flex: 1; min-width: 200px; }
+    .explain-title {
+      font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px;
+    }
+    .explain-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    .explain-insight {
+      background: linear-gradient(135deg,rgba(110,142,251,.08),rgba(167,139,250,.08));
+      border: 1px solid rgba(110,142,251,.18); border-radius: 8px;
+      padding: 10px 14px; font-size: 12px; color: var(--accent2);
+      font-family: var(--mono); flex-shrink: 0; max-width: 320px;
+      line-height: 1.6;
+    }
+
+    /* ─── MAIN LAYOUT ─── */
+    .rej-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr 280px;
+      gap: 16px; padding: 16px 24px;
+      max-width: 1500px; margin: 0 auto;
+      align-items: start;
+    }
+    .rej-controls { position: sticky; top: 16px; }
+    .rej-info { position: sticky; top: 16px; }
+
+    /* ─── CANVAS AREA ─── */
+    .canvas-area { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .canvas-panel { padding: 0; overflow: hidden; cursor: crosshair; }
+    .canvas-panel canvas, .aux-panel canvas { display: block; width: 100%; }
+    .aux-panel { padding: 12px; }
+    .aux-panel-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-dim); margin-bottom: 8px;
+    }
+
+    /* ─── CONTROL BAR ─── */
+    .ctrl-bar {
+      position: sticky; bottom: 0; z-index: 100;
+      background: rgba(15,19,32,0.96); backdrop-filter: blur(16px);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 24px;
+      padding: 12px 24px; flex-wrap: wrap;
+    }
+    .ctrl-play { display: flex; gap: 8px; align-items: center; }
+    .ctrl-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text-muted); border-radius: 8px; padding: 8px 14px;
+      font-family: var(--font); font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      transition: all .2s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary {
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+      border-color: transparent; color: white;
+      box-shadow: 0 4px 16px rgba(110,142,251,.35);
+    }
+    .ctrl-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(110,142,251,.45); }
+    .ctrl-btn.danger { color: var(--danger); border-color: rgba(248,113,113,.3); }
+    .ctrl-btn.danger:hover { background: rgba(248,113,113,.08); }
+    .ctrl-reject {
+      display: flex; align-items: center; gap: 10px; flex: 1; max-width: 360px;
+      label { font-size: 12px; color: var(--text-muted); white-space: nowrap; font-weight: 500; }
+    }
+    .ctrl-reject label { font-size: 12px; color: var(--text-muted); white-space: nowrap; font-weight: 500; }
+    .ctrl-speed {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .ctrl-speed label { font-size: 12px; color: var(--text-dim); }
+    .ctrl-speed select {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; padding: 6px 10px;
+      font-family: var(--font); font-size: 12px; cursor: pointer;
+    }
+    .ctrl-step-info {
+      font-family: var(--mono); font-size: 12px; color: var(--accent);
+      white-space: nowrap;
+    }
+    .auto-rej-btn {
+      background: rgba(251,146,60,.08); border: 1px solid rgba(251,146,60,.3);
+      color: var(--accent4); border-radius: 8px; padding: 7px 12px;
+      font-family: var(--font); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .2s; white-space: nowrap;
+    }
+    .auto-rej-btn:hover { background: rgba(251,146,60,.15); }
+
+    /* ─── INFO PANEL ─── */
+    .rej-info .panel-header { margin-bottom: 14px; }
+    .metrics-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 8px; margin-bottom: 16px;
+    }
+    .metric-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .metric-card-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+    .metric-card-val { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); }
+    .metric-card-val.green { color: var(--success); }
+    .metric-card-val.red { color: var(--danger); }
+    .metric-card-val.orange { color: var(--accent4); }
+
+    .chart-block { margin-bottom: 14px; }
+    .chart-block-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--text-dim); margin-bottom: 8px;
+    }
+    .chart-block canvas { width: 100% !important; height: 150px !important; }
+
+    /* ─── LEGEND ─── */
+    .legend { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .legend-ring {
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 2px solid; flex-shrink: 0; background: transparent;
+    }
+    .legend-x {
+      width: 12px; height: 12px;
+      color: var(--text-dim); display: flex; align-items: center;
+      justify-content: center; font-size: 13px; font-weight: 900;
+      flex-shrink: 0;
+    }
+
+    /* ─── TOOLTIP ─── */
+    #tooltip {
+      position: fixed; z-index: 9999;
+      background: rgba(21,27,46,0.97); border: 1px solid rgba(110,142,251,.3);
+      border-radius: 10px; padding: 12px 14px;
+      display: none; pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+      min-width: 160px;
+    }
+    .tt-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .tt-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; margin-bottom: 3px; }
+    .tt-row span:first-child { color: var(--text-muted); }
+    .tt-row span:last-child { color: var(--accent); font-family: var(--mono); font-weight: 600; }
+    .tt-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+
+    /* ─── LOADING OVERLAY ─── */
+    #loadOverlay {
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(10,13,20,0.92); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .load-content { text-align: center; }
+    .load-spinner {
+      width: 48px; height: 48px; border-radius: 50%;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    .load-content p { color: var(--text-muted); font-size: 14px; }
+    .load-content strong { color: var(--accent); font-family: var(--mono); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── PROGRESS BAR ─── */
+    .step-progress-line {
+      height: 3px; background: var(--border); border-radius: 99px;
+      overflow: hidden; margin: 8px 0 4px;
+    }
+    .step-progress-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px; transition: width .4s ease;
+    }
+
+    /* ─── TOGGLE GROUP ─── */
+    .toggle-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 1100px) {
+      .rej-layout { grid-template-columns: 200px 1fr; }
+      .rej-info { grid-column: 1 / -1; position: static; }
+    }
+    @media (max-width: 800px) {
+      .rej-layout { grid-template-columns: 1fr; }
+      .rej-controls { position: static; }
+    }
+
+    /* ─── FINAL MESSAGE ─── */
+    .final-overlay {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, rgba(110,142,251,.08) 0%, transparent 70%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      pointer-events: none; opacity: 0; transition: opacity 1s;
+    }
+    .final-overlay.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <div id="tooltip"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loadOverlay">
+    <div class="load-content">
+      <div class="load-spinner"></div>
+      <p>KNN modeli ve karar sınırı hesaplanıyor…<br><strong id="loadMsg">Lütfen bekleyin</strong></p>
+    </div>
+  </div>
+
+  <!-- ─── HERO ─── -->
+  <header class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-content">
+      <nav class="sim-nav">
+        <a href="index.html" class="nav-link">← Temel Simülasyon</a>
+        <span class="nav-sep">·</span>
+        <span class="nav-current">Rejection Option</span>
+      </nav>
+      <div class="hero-badge">
+        <span class="pulse-dot"></span>
+        <span>9 Adımlı İnteraktif Simülasyon</span>
+      </div>
+      <h1>Conformal Prediction + <span style="color:var(--accent4)">Rejection</span></h1>
+      <p style="margin:6px 0 14px;font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;background:linear-gradient(90deg,#fb923c,#a78bfa,#6e8efb);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Conformal garantiyle desteklenen uncertainty-aware red mekanizması</p>
+      <div class="hero-stats">
+        <div class="hstat"><span class="hstat-val" id="hStatTotal">150</span><span class="hstat-label">Veri Noktası</span></div>
+        <div class="hstat"><span class="hstat-val" id="hStatStep">1 / 9</span><span class="hstat-label">Mevcut Adım</span></div>
+        <div class="hstat"><span class="hstat-val" id="hStatAcc">—</span><span class="hstat-label">Do&#287;ruluk</span></div>
+        <div class="hstat"><span class="hstat-val" id="hStatRej">0%</span><span class="hstat-label">Reddetme Oranı</span></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── STEP BAR ─── -->
+  <div class="step-bar-wrap">
+    <div class="step-bar" id="stepBarInner"></div>
+  </div>
+
+  <!-- ─── EXPLAIN BOX ─── -->
+  <div class="explain-box">
+    <div class="explain-icon" id="stepIcon">📊</div>
+    <div class="explain-text">
+      <div class="explain-title" id="stepTitle">Veri Üretimi</div>
+      <div class="explain-desc" id="stepDesc">3 sınıflı 2 boyutlu sentetik veri seti oluşturuluyor. Her sınıf bir Gaussian kümesinden geliyor.</div>
+    </div>
+    <div class="explain-insight" id="stepInsight">Gerçek dünyada sınıflar çakışır — model her zaman emin olamaz.</div>
+  </div>
+
+  <!-- ─── MAIN LAYOUT ─── -->
+  <main class="rej-layout">
+
+    <!-- LEFT CONTROLS -->
+    <aside class="panel rej-controls">
+      <div class="panel-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Kontroller
+      </div>
+
+      <div class="control-group">
+        <div class="group-label">Conformal</div>
+        <div class="control-row">
+          <label for="alphaSlider">Hata Oranı (α)</label>
+          <div class="slider-wrap">
+            <input type="range" id="alphaSlider" min="0.01" max="0.4" step="0.01" value="0.10" />
+            <span class="slider-val" id="alphaVal">0.10</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="group-label" style="color:var(--accent4)">Reddetme Eşiği</div>
+        <div class="control-row">
+          <label for="rejThresholdCtrl">Oran (τ)</label>
+          <div class="slider-wrap">
+            <input type="range" id="rejThresholdCtrl" min="0" max="0.6" step="0.01" value="0" style="accent-color:#fb923c" />
+            <span class="slider-val" id="rejThresholdVal" style="color:var(--accent4)">0%</span>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
+          En düşük güvenli τ×N gözlem reddedilir. Adım 8+ etkili.
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="group-label">Görünüm</div>
+        <div class="toggle-group">
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="toggleDecision" checked /><span class="toggle-slider"></span></label>
+            <span>Karar sınırı</span>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="togglePredSets" checked /><span class="toggle-slider"></span></label>
+            <span>Prediction setleri</span>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="toggleConfidence" checked /><span class="toggle-slider"></span></label>
+            <span>Güven etiketleri</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="group-label">Adım Bilgisi</div>
+        <div class="step-progress-line">
+          <div class="step-progress-fill" id="progressFill" style="width:10%"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);text-align:center;" id="stepCounter">Adım 1 / 10</div>
+      </div>
+
+      <button class="btn-secondary" id="btnAutoReject" style="width:100%;margin-bottom:8px;font-size:12px;">
+        🔴 Reddetme Animasyonu
+      </button>
+
+      <button class="btn-secondary" id="btnNewData" style="width:100%;font-size:12px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.9"/></svg>
+        Yeni Veri Üret
+      </button>
+    </aside>
+
+    <!-- CENTER CANVAS AREA -->
+    <div class="canvas-area">
+      <div class="panel canvas-panel" id="canvasPanel">
+        <canvas id="mainCanvas" height="420"></canvas>
+      </div>
+
+      <div class="panel aux-panel" id="auxPanel" style="display:none;">
+        <div class="aux-panel-title" id="auxTitle">Güvene Göre Sıralama (Bar Chart)</div>
+        <canvas id="auxCanvas" height="140"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT INFO PANEL -->
+    <aside class="panel rej-info">
+      <div class="panel-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Metrikler
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-card-label">Doğruluk</div>
+          <div class="metric-card-val green" id="mAccuracy">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Reddedilen</div>
+          <div class="metric-card-val red" id="mRejRate">0%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">q̂ Eşiği</div>
+          <div class="metric-card-val" id="mQhat">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-card-label">Kabul Edilen</div>
+          <div class="metric-card-val orange" id="mAccepted">—</div>
+        </div>
+      </div>
+
+      <!-- Mini stat row -->
+      <div class="metrics-box" style="margin-bottom:14px;">
+        <div class="metric-item"><span class="metric-label">Eğitim</span><span class="metric-val" id="mTrainN">—</span></div>
+        <div class="metric-item"><span class="metric-label">Kalibrasyon</span><span class="metric-val" id="mCalibN">—</span></div>
+        <div class="metric-item"><span class="metric-label">Test</span><span class="metric-val" id="mTestN">—</span></div>
+        <div class="metric-item"><span class="metric-label">α</span><span class="metric-val" id="mAlpha">0.10</span></div>
+        <div class="metric-item"><span class="metric-label">Hedef Kapsama</span><span class="metric-val" id="mCovTarget">90%</span></div>
+      </div>
+
+      <!-- Legend (changes by step) -->
+      <div class="legend" id="dynamicLegend"></div>
+
+      <!-- Score Histogram (Step 4+) -->
+      <div class="chart-block" id="scoreChartWrap" style="display:none;">
+        <div class="chart-block-title">📊 Uyumsuzluk Skoru Dağılımı</div>
+        <canvas id="scoreChart"></canvas>
+      </div>
+
+      <!-- Accuracy Curve (Step 9+) -->
+      <div class="chart-block" id="accuracyChartWrap" style="display:none;">
+        <div class="chart-block-title">📈 Reddetme → Doğruluk</div>
+        <canvas id="accuracyChart"></canvas>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ─── CONTROL BAR ─── -->
+  <div class="ctrl-bar">
+    <div class="ctrl-play">
+      <button class="ctrl-btn" id="btnPrev" title="Önceki adım">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="ctrl-btn primary" id="btnPlay">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Oynat
+      </button>
+      <button class="ctrl-btn" id="btnNext" title="Sonraki adım">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button class="ctrl-btn danger" id="btnReset" title="Sıfırla">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.9"/></svg>
+        Sıfırla
+      </button>
+    </div>
+
+    <div class="ctrl-reject">
+      <label for="rejSlider">Reddetme Oranı</label>
+      <input type="range" id="rejSlider" min="0" max="0.6" step="0.01" value="0" />
+      <span class="slider-val" id="rejVal" style="min-width:40px;">0%</span>
+    </div>
+
+    <div class="ctrl-speed">
+      <label>Hız</label>
+      <select id="speedSelect">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.5">1.5×</option>
+        <option value="2">2×</option>
+        <option value="3">3×</option>
+      </select>
+    </div>
+
+    <div class="ctrl-step-info" id="ctrlStepInfo">Adım 1 / 10</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="rejection.js"></script>
+</body>
+</html>
